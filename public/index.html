@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Buscador Mercado Livre Brasil</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root { --y:#FFE600; --dark:#0f1623; --mid:#16213e; --card:#1a2540; --border:rgba(255,255,255,0.07); --muted:#8890a4; --text:#f0f0f0; --green:#2ed573; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--dark);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;background-image:linear-gradient(rgba(255,230,0,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,230,0,0.025) 1px,transparent 1px);background-size:40px 40px}
+  .wrap{max-width:1060px;margin:0 auto;padding:0 20px}
+  header{padding:36px 0 28px;border-bottom:1px solid var(--border);margin-bottom:32px;text-align:center}
+  .badge{background:var(--y);color:var(--dark);font-size:10px;font-weight:800;letter-spacing:2px;padding:3px 12px;border-radius:4px;display:inline-block;margin-bottom:12px}
+  h1{font-family:'Bebas Neue',cursive;font-size:clamp(32px,6vw,54px);letter-spacing:1.5px;line-height:1}
+  h1 span{color:var(--y)}
+  .sub{color:var(--muted);font-size:13px;margin-top:8px;font-weight:300}
+  .search-box{display:flex;border:2px solid var(--y);border-radius:10px;overflow:hidden;margin-bottom:14px;transition:box-shadow .2s}
+  .search-box:focus-within{box-shadow:0 0 0 4px rgba(255,230,0,0.12)}
+  #q{flex:1;background:var(--mid);border:none;color:var(--text);font-family:'DM Sans',sans-serif;font-size:16px;padding:15px 18px;outline:none}
+  #q::placeholder{color:var(--muted)}
+  #btn{background:var(--y);color:var(--dark);border:none;padding:0 26px;font-family:'Bebas Neue',cursive;font-size:18px;letter-spacing:1.5px;cursor:pointer;white-space:nowrap}
+  #btn:hover{background:#ffe926}
+  #btn:disabled{opacity:.5;cursor:wait}
+  .opts{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:28px;justify-content:center}
+  .opt-label{font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+  .chip{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:20px;padding:4px 14px;font-size:12px;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all .15s}
+  .chip:hover,.chip.on{border-color:var(--y);color:var(--y);background:rgba(255,230,0,0.06)}
+  #status{font-size:13px;color:var(--muted);margin-bottom:20px;min-height:20px;display:flex;align-items:center;gap:10px;justify-content:center}
+  .pill{background:rgba(255,230,0,0.1);color:var(--y);border-radius:20px;padding:2px 12px;font-size:12px;font-weight:600}
+  #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;margin-bottom:40px}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;text-decoration:none;color:inherit;display:flex;flex-direction:column;transition:transform .2s,border-color .2s,box-shadow .2s}
+  .card:hover{transform:translateY(-4px);border-color:rgba(255,230,0,0.3);box-shadow:0 12px 30px rgba(0,0,0,0.3)}
+  .card-img{aspect-ratio:1;background:#1e2d4a;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .card-img img{width:100%;height:100%;object-fit:contain;padding:12px;transition:transform .3s}
+  .card:hover .card-img img{transform:scale(1.06)}
+  .card-body{padding:12px 14px 14px;flex:1;display:flex;flex-direction:column;gap:6px}
+  .card-title{font-size:12.5px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;color:#dde}
+  .card-price{font-family:'Bebas Neue',cursive;font-size:22px;color:var(--y);letter-spacing:.5px}
+  .card-foot{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto;padding-top:8px;border-top:1px solid var(--border)}
+  .tag{font-size:10px;padding:2px 8px;border-radius:4px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+  .tag-new{background:rgba(255,230,0,0.12);color:var(--y)}
+  .tag-used{background:rgba(255,255,255,0.06);color:var(--muted)}
+  .tag-free{background:rgba(46,213,115,0.12);color:var(--green)}
+  .state{grid-column:1/-1;display:flex;flex-direction:column;align-items:center;padding:70px 20px;gap:12px;color:var(--muted);text-align:center}
+  .state-icon{font-size:48px;opacity:.35}
+  .state h3{font-family:'Bebas Neue',cursive;font-size:26px;color:var(--text);opacity:.35}
+  .state p{font-size:13px;font-weight:300}
+  .loader{width:38px;height:38px;border:3px solid rgba(255,230,0,0.15);border-top-color:var(--y);border-radius:50%;animation:spin .7s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  #more-btn{display:none;margin:0 auto 48px;background:transparent;border:2px solid var(--y);color:var(--y);font-family:'Bebas Neue',cursive;font-size:18px;letter-spacing:2px;padding:11px 36px;border-radius:8px;cursor:pointer;transition:all .15s}
+  #more-btn:hover{background:var(--y);color:var(--dark)}
+  footer{border-top:1px solid var(--border);padding:20px 0;text-align:center;font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="badge">🇧🇷 MERCADO LIVRE BRASIL</div>
+    <h1>Buscador <span>ML</span> Brasil</h1>
+    <p class="sub">Productos reales · Precios en BRL · Sin necesidad de cuenta</p>
+  </header>
+
+  <div class="search-box">
+    <input type="text" id="q" placeholder="Ej: iPhone 15, Nike Air Max, PlayStation 5..." autocomplete="off"/>
+    <button id="btn" onclick="doSearch()">BUSCAR</button>
+  </div>
+
+  <div class="opts">
+    <span class="opt-label">Ordenar:</span>
+    <button class="chip on" data-sort="">Relevancia</button>
+    <button class="chip" data-sort="price_asc">Menor precio</button>
+    <button class="chip" data-sort="price_desc">Mayor precio</button>
+  </div>
+
+  <div id="status"></div>
+  <div id="grid">
+    <div class="state">
+      <div class="state-icon">🔍</div>
+      <h3>Esperando búsqueda</h3>
+      <p>Escribí un producto para buscar en el catálogo de Brasil</p>
+    </div>
+  </div>
+  <button id="more-btn" onclick="loadMore()">CARGAR MÁS</button>
+</div>
+
+<footer><div class="wrap">Datos en tiempo real desde mercadolivre.com.br</div></footer>
+
+<script>
+  let currentQ='', currentSort='', currentOffset=0, total=0;
+
+  document.querySelectorAll('.chip[data-sort]').forEach(c=>{
+    c.addEventListener('click',()=>{
+      document.querySelectorAll('.chip[data-sort]').forEach(x=>x.classList.remove('on'));
+      c.classList.add('on');
+      currentSort=c.dataset.sort;
+      if(currentQ) doSearch();
+    });
+  });
+
+  document.getElementById('q').addEventListener('keydown',e=>{ if(e.key==='Enter') doSearch(); });
+
+  function fmt(n){ return 'R$ '+Number(n).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+  async function doSearch(){
+    const q=document.getElementById('q').value.trim();
+    if(!q) return;
+    currentQ=q; currentOffset=0;
+    document.getElementById('grid').innerHTML='<div class="state"><div class="loader"></div><p>Buscando en Mercado Livre Brasil...</p></div>';
+    document.getElementById('status').innerHTML='';
+    document.getElementById('more-btn').style.display='none';
+    document.getElementById('btn').disabled=true;
+    await fetchPage(true);
+    document.getElementById('btn').disabled=false;
+  }
+
+  async function loadMore(){ currentOffset+=24; await fetchPage(false); }
+
+  async function fetchPage(replace){
+    try{
+      const url=`/buscar?q=${encodeURIComponent(currentQ)}&sort=${currentSort}&offset=${currentOffset}`;
+      const res=await fetch(url);
+      if(!res.ok) throw new Error(`Error ${res.status}`);
+      const data=await res.json();
+      total=data.paging.total;
+      const items=data.results;
+
+      if(replace) document.getElementById('grid').innerHTML='';
+
+      if(items.length===0 && replace){
+        document.getElementById('grid').innerHTML='<div class="state"><div class="state-icon">😕</div><h3>Sin resultados</h3><p>Probá con otras palabras</p></div>';
+        return;
+      }
+
+      items.forEach(item=>{
+        const card=document.createElement('a');
+        card.className='card';
+        card.href=item.permalink;
+        card.target='_blank';
+        card.rel='noopener noreferrer';
+        const img=(item.thumbnail||'').replace('http://','https://');
+        card.innerHTML=`
+          <div class="card-img"><img src="${img}" alt="" loading="lazy" onerror="this.parentNode.innerHTML='<span style=font-size:36px;opacity:.3>📦</span>'"/></div>
+          <div class="card-body">
+            <div class="card-title">${esc(item.title)}</div>
+            <div class="card-price">${item.price>0?fmt(item.price):'Ver precio'}</div>
+            <div class="card-foot">
+              <span class="tag ${item.condition==='new'?'tag-new':'tag-used'}">${item.condition==='new'?'Nuevo':'Usado'}</span>
+              ${item.free_shipping?'<span class="tag tag-free">Flete gratis</span>':''}
+            </div>
+          </div>`;
+        document.getElementById('grid').appendChild(card);
+      });
+
+      const loaded=currentOffset+items.length;
+      document.getElementById('status').innerHTML=`<span class="pill">${total.toLocaleString()} resultados</span> Mostrando ${loaded} de ${total}`;
+      document.getElementById('more-btn').style.display=loaded<total?'block':'none';
+
+    }catch(e){
+      if(replace) document.getElementById('grid').innerHTML=`<div class="state"><div class="state-icon">⚠️</div><h3>Error de conexión</h3><p>${e.message}</p></div>`;
+    }
+  }
+
+  function esc(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+</script>
+</body>
+</html>
