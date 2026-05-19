@@ -1,6 +1,7 @@
 const express = require("express");
-const app = express();
+const puppeteer = require("puppeteer");
 const path = require("path");
+const app = express();
 
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
@@ -16,28 +17,22 @@ app.get("/buscar", async (req, res) => {
 
   if (!q) return res.status(400).json({ error: "Falta el parámetro q" });
 
+  let browser;
   try {
-    // Intentar con la API de ML primero
-    const apiUrl = `https://api.mercadolibre.com/sites/MLB/search?q=${encodeURIComponent(q)}&limit=24&offset=${offset}${sort ? "&sort=" + sort : ""}`;
-    
-    const apiRes = await fetch(apiUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Accept": "application/json",
-        "Accept-Language": "pt-BR,pt;q=0.9",
-        "Referer": "https://www.mercadolivre.com.br/",
-        "Origin": "https://www.mercadolivre.com.br",
-      }
+    browser = await puppeteer.launch({
+      headless: "new",
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+      ],
     });
 
-    if (apiRes.ok) {
-      const data = await apiRes.json();
-      if (data.results && data.results.length > 0) {
-        return res.json(data);
-      }
-    }
+    const page = await browser.newPage();
+    await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
+    await page.setExtraHTTPHeaders({ "Accept-Language": "pt-BR,pt;q=0.9" });
 
-    // Fallback: scraping del sitio web
     const slug = q.toLowerCase()
       .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
       .replace(/\s+/g, "-")
@@ -48,69 +43,59 @@ app.get("/buscar", async (req, res) => {
     if (sort === "price_desc") url += "_OrderId_PRICE_DESC";
     if (offset > 0) url += `_Desde_${offset + 1}`;
 
-    const scrapeRes = await fetch(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8",
-        "Cache-Control": "no-cache",
-        "Upgrade-Insecure-Requests": "1",
-      }
+    await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
+
+    // Esperar que carguen los productos
+    await page.waitForSelector(".ui-search-layout__item", { timeout: 10000 }).catch(() => {});
+
+    const items = await page.evaluate(() => {
+      const cards = document.querySelectorAll(".ui-search-layout__item");
+      const results = [];
+
+      cards.forEach(card => {
+        try {
+          const titleEl = card.querySelector(".poly-component__title, .ui-search-item__title");
+          const priceEl = card.querySelector(".andes-money-amount__fraction");
+          const linkEl = card.querySelector("a.poly-component__title, a.ui-search-item__group__element");
+          const imgEl = card.querySelector("img.poly-component__picture, img.ui-search-result-image__element");
+          const freeEl = card.querySelector(".poly-component__shipping, .ui-search-item__shipping");
+
+          if (!titleEl || !linkEl) return;
+
+          const price = priceEl ? parseInt(priceEl.textContent.replace(/\./g, "").replace(",", "")) : 0;
+          const freeShipping = freeEl ? /grátis|gratis/i.test(freeEl.textContent) : false;
+          const condition = /usado/i.test(card.textContent) ? "used" : "new";
+          const img = imgEl ? (imgEl.dataset.src || imgEl.src || "") : "";
+
+          results.push({
+            title: titleEl.textContent.trim(),
+            price,
+            currency_id: "BRL",
+            condition,
+            thumbnail: img.replace("http://", "https://"),
+            permalink: linkEl.href.split("?")[0],
+            shipping: { free_shipping: freeShipping },
+            sold_quantity: 0,
+          });
+        } catch(e) {}
+      });
+
+      return results;
     });
 
-    const html = await scrapeRes.text();
-    const items = [];
+    const totalText = await page.evaluate(() => {
+      const el = document.querySelector(".ui-search-search-result__quantity-results, h2.ui-search-search-result__quantity-results");
+      return el ? el.textContent : "";
+    });
 
-    // Intentar extraer JSON embebido en el HTML
-    const jsonPatterns = [
-      /window\.__PRELOADED_STATE__\s*=\s*(\{.+?\});/s,
-      /window\.__INITIAL_STATE__\s*=\s*(\{.+?\});/s,
-      /"results"\s*:\s*(\[[\s\S]+?\])\s*,\s*"paging"/,
-    ];
-
-    for (const pattern of jsonPatterns) {
-      const match = html.match(pattern);
-      if (match) {
-        try {
-          const parsed = JSON.parse(match[1]);
-          const results = Array.isArray(parsed) ? parsed :
-            parsed?.results || parsed?.initialState?.results || 
-            parsed?.listingMain?.results || [];
-          
-          for (const item of results.slice(0, 24)) {
-            if (!item.title) continue;
-            items.push({
-              id: item.id,
-              title: item.title,
-              price: item.price || 0,
-              currency_id: "BRL",
-              condition: item.condition || "new",
-              thumbnail: (item.thumbnail || item.pictures?.[0]?.url || "").replace("http://", "https://"),
-              permalink: item.permalink || `https://www.mercadolivre.com.br/p/${item.id}`,
-              shipping: { free_shipping: item.shipping?.free_shipping || false },
-              sold_quantity: item.sold_quantity || 0,
-            });
-          }
-          if (items.length > 0) break;
-        } catch(e) {}
-      }
-    }
-
-    const totalMatch = html.match(/(\d[\d.]*)\s*resultados/i);
+    const totalMatch = totalText.match(/(\d[\d.]*)/);
     const total = totalMatch ? parseInt(totalMatch[1].replace(/\./g, "")) : items.length;
 
-    res.json({
-      results: items,
-      paging: { total, offset, limit: 24 },
-      debug: {
-        html_length: html.length,
-        url_fetched: url,
-        status: scrapeRes.status,
-        items_found: items.length,
-      }
-    });
+    await browser.close();
+    res.json({ results: items, paging: { total, offset, limit: 24 } });
 
   } catch (e) {
+    if (browser) await browser.close();
     res.status(500).json({ error: e.message });
   }
 });
